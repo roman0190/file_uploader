@@ -8,7 +8,6 @@ import {
 } from "firebase/storage";
 import { collection, addDoc } from "firebase/firestore";
 import { storage, db } from "../firebase";
-import QRCode from "qrcode";
 import { nanoid } from "nanoid";
 import Image from "next/image";
 
@@ -48,7 +47,6 @@ interface FileMetadata {
   size: number;
   type: string;
   createdAt: string;
-  qrCode: string;
   downloadCount: number;
   customUrl: string;
   description: string;
@@ -188,9 +186,6 @@ const FileUpload: React.FC = () => {
         async () => {
           try {
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            const qrCode = await QRCode.toDataURL(
-              `https://file-uploader-woad-rho.vercel.app/download/${customUrl}`
-            );
 
             const metadata: FileMetadata = {
               name: file.name,
@@ -199,7 +194,6 @@ const FileUpload: React.FC = () => {
               size: file.size,
               type: file.type,
               createdAt: new Date().toISOString(),
-              qrCode,
               downloadCount: 0,
               customUrl,
               description: options.description || "",

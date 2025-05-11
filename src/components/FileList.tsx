@@ -20,7 +20,6 @@ const FileList: React.FC = () => {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileMetadata | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -247,16 +246,6 @@ const FileList: React.FC = () => {
     }
   };
 
-  const handleShowQR = (file: FileMetadata) => {
-    setSelectedFile(file);
-    setShowQRModal(true);
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Link copied to clipboard");
-  };
-
   const getPreviewComponent = (file: FileMetadata, url: string) => {
     if (file.type.startsWith("image/")) {
       return (
@@ -349,11 +338,6 @@ const FileList: React.FC = () => {
                 {file.password && (
                   <p className="text-sm text-blue-400">Password Protected</p>
                 )}
-                {file.customUrl && (
-                  <p className="text-sm text-green-400">
-                    Custom URL: {file.customUrl}
-                  </p>
-                )}
               </div>
               <div className="flex space-x-2">
                 <button
@@ -425,12 +409,6 @@ const FileList: React.FC = () => {
                   ) : (
                     "Download"
                   )}
-                </button>
-                <button
-                  onClick={() => handleShowQR(file)}
-                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
-                >
-                  QR Code
                 </button>
                 <button
                   onClick={() => handleDelete(file)}
@@ -565,47 +543,6 @@ const FileList: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
                 Download
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* QR Code Modal */}
-      {showQRModal && selectedFile && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center">
-          <div className="bg-gray-900 p-6 rounded-lg w-96 border border-gray-700">
-            <h3 className="text-lg font-medium mb-4 text-white">QR Code</h3>
-            <div className="flex flex-col items-center">
-              <div className="relative w-48 h-48 mb-4 bg-white p-2 rounded">
-                <Image
-                  src={selectedFile.qrCode}
-                  alt="QR Code"
-                  fill
-                  className="object-contain"
-                  unoptimized
-                />
-              </div>
-              <p className="text-sm text-gray-300 mb-2">
-                Scan to download: {selectedFile.name}
-              </p>
-              <button
-                onClick={() =>
-                  copyToClipboard(
-                    `https://file-uploader-woad-rho.vercel.app/download/${selectedFile.customUrl}`
-                  )
-                }
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Copy Link
-              </button>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setShowQRModal(false)}
-                className="px-4 py-2 text-gray-400 hover:text-gray-300"
-              >
-                Close
               </button>
             </div>
           </div>
