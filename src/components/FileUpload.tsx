@@ -10,6 +10,7 @@ import { collection, addDoc } from "firebase/firestore";
 import { storage, db } from "../firebase";
 import QRCode from "qrcode";
 import { nanoid } from "nanoid";
+import Image from "next/image";
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
@@ -32,20 +33,28 @@ const ALLOWED_FILE_TYPES: AllowedFileTypes = {
   "audio/*": ["mp3", "wav", "ogg"],
 };
 
-interface FileUploadState {
-  files: File[];
-  isDragging: boolean;
-  uploadProgress: { [key: string]: number };
-  errors: { [key: string]: string[] };
-  uploadTasks: { [key: string]: UploadTask };
-}
-
 interface FileOptions {
   password?: string;
   expiresAt?: string;
   maxDownloads?: number | null;
   customUrl?: string;
   description?: string;
+}
+
+interface FileMetadata {
+  name: string;
+  url: string;
+  storagePath: string;
+  size: number;
+  type: string;
+  createdAt: string;
+  qrCode: string;
+  downloadCount: number;
+  customUrl: string;
+  description: string;
+  maxDownloads: number | null;
+  password?: string;
+  expiresAt?: string;
 }
 
 const FileUpload: React.FC = () => {
@@ -183,7 +192,7 @@ const FileUpload: React.FC = () => {
               `${window.location.origin}/download/${customUrl}`
             );
 
-            const metadata: any = {
+            const metadata: FileMetadata = {
               name: file.name,
               url: downloadURL,
               storagePath: filePath,
@@ -329,12 +338,14 @@ const FileUpload: React.FC = () => {
             >
               <div className="flex items-start space-x-4">
                 {file.type.startsWith("image/") && (
-                  <div className="w-16 h-16 flex-shrink-0">
-                    <img
+                  <div className="relative w-16 h-16 flex-shrink-0">
+                    <Image
                       src={getFilePreview(file) || ""}
                       alt={file.name}
-                      className="w-full h-full object-cover rounded cursor-pointer"
+                      fill
+                      className="object-cover rounded cursor-pointer"
                       onClick={() => togglePreview(file.name)}
+                      unoptimized
                     />
                   </div>
                 )}
@@ -381,11 +392,13 @@ const FileUpload: React.FC = () => {
                 </div>
               </div>
               {showPreview[file.name] && file.type.startsWith("image/") && (
-                <div className="mt-4">
-                  <img
+                <div className="mt-4 relative w-full h-96">
+                  <Image
                     src={getFilePreview(file) || ""}
                     alt={file.name}
-                    className="max-w-full max-h-96 object-contain rounded"
+                    fill
+                    className="object-contain rounded"
+                    unoptimized
                   />
                 </div>
               )}

@@ -8,14 +8,14 @@ import {
   deleteDoc,
   doc,
   updateDoc,
-  where,
+
 } from "firebase/firestore";
 import { deleteObject, ref, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../firebase";
 import { FileMetadata } from "../types/file";
-import QRCode from "qrcode";
 import { format } from "date-fns";
 import { toast } from "react-hot-toast";
+import Image from "next/image";
 
 const FileList: React.FC = () => {
   const [files, setFiles] = useState<FileMetadata[]>([]);
@@ -186,11 +186,15 @@ const FileList: React.FC = () => {
   const getPreviewComponent = (file: FileMetadata, url: string) => {
     if (file.type.startsWith("image/")) {
       return (
-        <img
-          src={url}
-          alt={file.name}
-          className="max-w-full max-h-[70vh] object-contain"
-        />
+        <div className="relative w-full h-[70vh]">
+          <Image
+            src={url}
+            alt={file.name}
+            fill
+            className="object-contain"
+            unoptimized
+          />
+        </div>
       );
     } else if (file.type.startsWith("video/")) {
       return <video src={url} controls className="max-w-full max-h-[70vh]" />;
@@ -388,11 +392,15 @@ const FileList: React.FC = () => {
           <div className="bg-gray-900 p-6 rounded-lg w-96 border border-gray-700">
             <h3 className="text-lg font-medium mb-4 text-white">QR Code</h3>
             <div className="flex flex-col items-center">
-              <img
-                src={selectedFile.qrCode}
-                alt="QR Code"
-                className="w-48 h-48 mb-4 bg-white p-2 rounded"
-              />
+              <div className="relative w-48 h-48 mb-4 bg-white p-2 rounded">
+                <Image
+                  src={selectedFile.qrCode}
+                  alt="QR Code"
+                  fill
+                  className="object-contain"
+                  unoptimized
+                />
+              </div>
               <p className="text-sm text-gray-300 mb-2">
                 Scan to download: {selectedFile.name}
               </p>
