@@ -30,6 +30,7 @@ const FileList: React.FC = () => {
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: { preview: boolean; download: boolean };
   }>({});
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "files"), orderBy("createdAt", "desc"));
@@ -64,9 +65,78 @@ const FileList: React.FC = () => {
     }
   };
 
+  const handlePasswordSubmit = async () => {
+    if (!selectedFile || !password) return;
+
+    try {
+      setIsSubmittingPassword(true);
+      if (password === selectedFile.password) {
+        setShowPasswordModal(false);
+        setPassword("");
+        setError("");
+
+        // Get a fresh download URL
+        const storageRef = ref(storage, selectedFile.storagePath);
+        const downloadURL = await getDownloadURL(storageRef);
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(downloadURL)}`;
+
+        if (showPreviewModal) {
+          // Handle preview
+          const response = await fetch(proxyUrl);
+          if (!response.ok) {
+            throw new Error(
+              `Failed to fetch file: ${response.status} ${response.statusText}`
+            );
+          }
+
+          const blob = await response.blob();
+          const objectUrl = window.URL.createObjectURL(blob);
+          setPreviewUrl(objectUrl);
+          setSelectedFile(selectedFile);
+          setShowPreviewModal(true);
+        } else {
+          // Handle download
+          const response = await fetch(proxyUrl);
+          if (!response.ok) {
+            throw new Error(
+              `Failed to fetch file: ${response.status} ${response.statusText}`
+            );
+          }
+
+          const blob = await response.blob();
+          const objectUrl = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = objectUrl;
+          a.download = selectedFile.name;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(objectUrl);
+          document.body.removeChild(a);
+
+          // Update download count
+          await updateDoc(doc(db, "files", selectedFile.id), {
+            downloadCount: (selectedFile.downloadCount || 0) + 1,
+          });
+
+          toast.success("File downloaded successfully");
+        }
+      } else {
+        setError("Incorrect password");
+        toast.error("Incorrect password");
+      }
+    } catch (error) {
+      console.error("Error handling password-protected file:", error);
+      setError(`Failed to access file: ${(error as Error).message}`);
+      toast.error("Failed to access file. Please try again.");
+    } finally {
+      setIsSubmittingPassword(false);
+    }
+  };
+
   const handlePreview = async (file: FileMetadata) => {
     if (file.password) {
       setSelectedFile(file);
+      setShowPreviewModal(true);
       setShowPasswordModal(true);
       return;
     }
@@ -118,6 +188,7 @@ const FileList: React.FC = () => {
   const handleDownload = async (file: FileMetadata) => {
     if (file.password) {
       setSelectedFile(file);
+      setShowPreviewModal(false);
       setShowPasswordModal(true);
       return;
     }
@@ -173,24 +244,6 @@ const FileList: React.FC = () => {
         ...prev,
         [file.id]: { ...prev[file.id], download: false },
       }));
-    }
-  };
-
-  const handlePasswordSubmit = async () => {
-    if (!selectedFile || !password) return;
-
-    if (password === selectedFile.password) {
-      setShowPasswordModal(false);
-      setPassword("");
-      setError("");
-      if (showPreviewModal) {
-        handlePreview(selectedFile);
-      } else {
-        handleDownload(selectedFile);
-      }
-    } else {
-      setError("Incorrect password");
-      toast.error("Incorrect password");
     }
   };
 
@@ -431,6 +484,7 @@ const FileList: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full p-2 border rounded mb-4 bg-gray-800 text-white border-gray-700"
               placeholder="Enter file password"
+              disabled={isSubmittingPassword}
             />
             {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
             <div className="flex justify-end space-x-2">
@@ -441,14 +495,42 @@ const FileList: React.FC = () => {
                   setError("");
                 }}
                 className="px-4 py-2 text-gray-400 hover:text-gray-300"
+                disabled={isSubmittingPassword}
               >
                 Cancel
               </button>
               <button
                 onClick={handlePasswordSubmit}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                disabled={isSubmittingPassword}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2 min-w-[100px] justify-center"
               >
-                Submit
+                {isSubmittingPassword ? (
+                  <>
+                    <svg
+                      className="animate-spin h-4 w-4 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  "Submit"
+                )}
               </button>
             </div>
           </div>
