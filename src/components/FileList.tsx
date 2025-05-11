@@ -8,7 +8,6 @@ import {
   deleteDoc,
   doc,
   updateDoc,
-
 } from "firebase/firestore";
 import { deleteObject, ref, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../firebase";
@@ -28,6 +27,9 @@ const FileList: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loadingStates, setLoadingStates] = useState<{
+    [key: string]: { preview: boolean; download: boolean };
+  }>({});
 
   useEffect(() => {
     const q = query(collection(db, "files"), orderBy("createdAt", "desc"));
@@ -70,6 +72,11 @@ const FileList: React.FC = () => {
     }
 
     try {
+      setLoadingStates((prev) => ({
+        ...prev,
+        [file.id]: { ...prev[file.id], preview: true },
+      }));
+
       if (file.expiresAt && new Date(file.expiresAt) < new Date()) {
         toast.error("File has expired");
         return;
@@ -82,11 +89,9 @@ const FileList: React.FC = () => {
 
       const storageRef = ref(storage, file.storagePath);
       const downloadURL = await getDownloadURL(storageRef);
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(downloadURL)}`;
 
-      const tempLink = document.createElement("a");
-      tempLink.href = downloadURL;
-
-      const response = await fetch(downloadURL);
+      const response = await fetch(proxyUrl);
       if (!response.ok) {
         throw new Error(
           `Failed to fetch file: ${response.status} ${response.statusText}`
@@ -94,14 +99,19 @@ const FileList: React.FC = () => {
       }
 
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      setPreviewUrl(url);
+      const objectUrl = window.URL.createObjectURL(blob);
+      setPreviewUrl(objectUrl);
       setSelectedFile(file);
       setShowPreviewModal(true);
     } catch (error) {
       console.error("Error previewing file:", error);
       setError(`Failed to preview file: ${(error as Error).message}`);
       toast.error("Failed to preview file. Please try downloading instead.");
+    } finally {
+      setLoadingStates((prev) => ({
+        ...prev,
+        [file.id]: { ...prev[file.id], preview: false },
+      }));
     }
   };
 
@@ -113,6 +123,11 @@ const FileList: React.FC = () => {
     }
 
     try {
+      setLoadingStates((prev) => ({
+        ...prev,
+        [file.id]: { ...prev[file.id], download: true },
+      }));
+
       if (file.maxDownloads && file.downloadCount >= file.maxDownloads) {
         toast.error("Maximum download limit reached");
         return;
@@ -125,8 +140,9 @@ const FileList: React.FC = () => {
 
       const storageRef = ref(storage, file.storagePath);
       const downloadURL = await getDownloadURL(storageRef);
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(downloadURL)}`;
 
-      const response = await fetch(downloadURL);
+      const response = await fetch(proxyUrl);
       if (!response.ok) {
         throw new Error(
           `Failed to fetch file: ${response.status} ${response.statusText}`
@@ -134,13 +150,13 @@ const FileList: React.FC = () => {
       }
 
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const objectUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
+      a.href = objectUrl;
       a.download = file.name;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(objectUrl);
       document.body.removeChild(a);
 
       await updateDoc(doc(db, "files", file.id), {
@@ -152,6 +168,11 @@ const FileList: React.FC = () => {
       console.error("Error downloading file:", error);
       setError(`Failed to download file: ${(error as Error).message}`);
       toast.error("Failed to download file. Please try again later.");
+    } finally {
+      setLoadingStates((prev) => ({
+        ...prev,
+        [file.id]: { ...prev[file.id], download: false },
+      }));
     }
   };
 
@@ -284,17 +305,73 @@ const FileList: React.FC = () => {
               <div className="flex space-x-2">
                 <button
                   onClick={() => handlePreview(file)}
-                  className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-                  disabled={isDeleting === file.id}
+                  disabled={
+                    loadingStates[file.id]?.preview || isDeleting === file.id
+                  }
+                  className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-2 min-w-[100px] justify-center"
                 >
-                  Preview
+                  {loadingStates[file.id]?.preview ? (
+                    <>
+                      <svg
+                        className="animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <span>Loading...</span>
+                    </>
+                  ) : (
+                    "Preview"
+                  )}
                 </button>
                 <button
                   onClick={() => handleDownload(file)}
-                  className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                  disabled={isDeleting === file.id}
+                  disabled={
+                    loadingStates[file.id]?.download || isDeleting === file.id
+                  }
+                  className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2 min-w-[100px] justify-center"
                 >
-                  Download
+                  {loadingStates[file.id]?.download ? (
+                    <>
+                      <svg
+                        className="animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <span>Loading...</span>
+                    </>
+                  ) : (
+                    "Download"
+                  )}
                 </button>
                 <button
                   onClick={() => handleShowQR(file)}
@@ -304,10 +381,36 @@ const FileList: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handleDelete(file)}
-                  className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
                   disabled={isDeleting === file.id}
+                  className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
                 >
-                  {isDeleting === file.id ? "Deleting..." : "Delete"}
+                  {isDeleting === file.id ? (
+                    <div className="flex items-center space-x-2">
+                      <svg
+                        className="animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <span>Deleting...</span>
+                    </div>
+                  ) : (
+                    "Delete"
+                  )}
                 </button>
               </div>
             </div>
@@ -407,7 +510,7 @@ const FileList: React.FC = () => {
               <button
                 onClick={() =>
                   copyToClipboard(
-                    `${window.location.origin}/download/${selectedFile.customUrl}`
+                    `https://file-uploader-woad-rho.vercel.app/download/${selectedFile.customUrl}`
                   )
                 }
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"

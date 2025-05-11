@@ -189,7 +189,7 @@ const FileUpload: React.FC = () => {
           try {
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
             const qrCode = await QRCode.toDataURL(
-              `${window.location.origin}/download/${customUrl}`
+              `https://file-uploader-woad-rho.vercel.app/download/${customUrl}`
             );
 
             const metadata: FileMetadata = {
